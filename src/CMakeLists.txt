@@ -1,0 +1,27 @@
+set(serial_SRCS serial/serial.cc)
+if(APPLE)
+    # If OSX
+    list(APPEND serial_SRCS serial/impl/unix.cc)
+    list(APPEND serial_SRCS serial/impl/list_ports/list_ports_osx.cc)
+elseif(UNIX)
+    # If unix
+    list(APPEND serial_SRCS serial/impl/unix.cc)
+    list(APPEND serial_SRCS serial/impl/list_ports/list_ports_linux.cc)
+else()
+    # If windows
+    list(APPEND serial_SRCS serial/impl/win.cc)
+    list(APPEND serial_SRCS serial/impl/list_ports/list_ports_win.cc)
+endif()
+add_library(serial ${serial_SRCS})
+target_include_directories(serial PUBLIC "${PROJECT_SOURCE_DIR}/include")
+if(APPLE)
+	target_link_libraries(serial IOKit Foundation)
+elseif(UNIX)
+	target_link_libraries(serial rt pthread)
+else()
+	target_link_libraries(serial setupapi advapi32)
+endif()
+
+add_library(NIM libNIM.cpp)
+target_include_directories(NIM PUBLIC "${PROJECT_SOURCE_DIR}/include/serial")
+target_link_libraries(NIM serial)

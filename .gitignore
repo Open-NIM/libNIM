@@ -30,3 +30,7 @@
 *.exe
 *.out
 *.app
+
+*.oxy
+*.swp
+build

@@ -88,7 +88,6 @@ namespace NIM{
 	uint64_t string_to_uint64_t(const std::string &s);
 
 
-	class 
 }
 
 

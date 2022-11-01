@@ -3,8 +3,20 @@
 
 namespace NIM{
 	
-	std::vector<std::unique_ptr<NIM::Module>> listAvailableModules(){
-		std::vector<std::unique_ptr<NIM::Module>> lsm;
+	Module_base::Module_base(const NIM::moduleType t, const std::string pi, uint64_t srl) :  tp{t}, serialNumber{srl}{
+		try{
+			sp.setPort(pi);
+			sp.open();
+		}
+		catch(const serial::IOException & e){
+			throw ModuleUnreachable{sp.getPort()};
+		}catch(const std::exception & e){
+			throw UnexpectedException{e};
+		}
+	}
+
+	std::vector<std::shared_ptr<NIM::Module_base>> listAvailableModules(){
+		std::vector<std::shared_ptr<NIM::Module_base>> lsm;
 		auto lsp{serial::list_ports()};
 		serial::Serial tmpS{};
 		for(auto i : lsp){
@@ -18,17 +30,23 @@ namespace NIM{
 					tmpS.close();
 					switch(num){
 						case 0:
-							lsm.emplace_back(std::make_unique<NIM::Counter>(i.port, num));
+							lsm.emplace_back(std::make_shared<NIM::Counter>(i.port, num));
 							break;
 						default:
 							break;
 					}
 				}
-				catch(const std::exception &e){
-					std::cout << e.what() << "\n";
+				catch(const serial::IOException &e){
+					throw ModuleUnreachable{i.port};
 					//serial error checking and rethrowing with custom NIM-specific errors
 					//do: create std::exception NIM classes 
 
+				}
+				catch(const NIM::MaxCommunicationAttempts & e){
+					throw e;
+				}
+				catch(const std::exception &e){
+					throw UnexpectedException{e};
 				}
 			}
 		}
@@ -36,20 +54,17 @@ namespace NIM{
 		return lsm;
 	}
 	
-	uint64_t send_serialNumber_request(serial::Serial &sp){
+	uint64_t send_serialNumber_request(serial::Serial &sp, uint16_t N){
 		static std::string out{'S','R','L','N'};
 		std::string buff;
-		sp.flush();
-		int attempts{};
-		do{
-			//5 attempts to send the message
-			if(attempts >= 5){
-				throw /* error */;
-			}
+		for(int attempts{}; attempts< N; ++attempts){
+			sp.flushInput();
 			sp.write(out);
+			while(!(sp.waitReadable()));
 			buff = sp.readline(10);
-		}while(!(buff.compare(0,4, "ERR!")));
-		return string_to_uint64_t(buff);
+			if((buff.find("ERR!") == std::string::npos) && (buff.size() == 8)) return string_to_uint64_t(buff);
+		}
+		throw MaxCommunicationAttempts{sp.getPort()}; 
 	}
 
 	uint32_t string_to_uint32_t(const std::string &s){
@@ -63,74 +78,81 @@ namespace NIM{
 	}
 
 	bool Counter::send(const NIM::Counter::command_noargs_bool cmd){
-		std::string tmp{send_and_check(cmdList[cmd])};
-		if(tmp.size() != 1) throw /* */; /*error in the improbable eventuality the return value is different than expected (e.g. a 3byte+endline value is obtained instead of an expected 8 bytes +endline value).*/
-		return tmp[0];
+		return send_and_check(cmdList[cmd], 1)[0];
 	}
 
 	uint32_t Counter::send(const NIM::Counter::command_noargs_32ret cmd){
-		std::string tmp{send_and_check(cmdList[cmd])};
-		if(tmp.size() != 4) throw /* */;
-		return string_to_uint64_t(tmp);
+		return string_to_uint32_t(send_and_check(cmdList[cmd], 4));
 	}
 
 	uint64_t Counter::send(const NIM::Counter::command_noargs_64ret cmd){
-		std::string tmp{send_and_check(cmdList[cmd])};
-		if(tmp.size() != 8) throw /* */;
-		return string_to_uint64_t(tmp);
+		return string_to_uint64_t(send_and_check(cmdList[cmd], 8));
 	}
+
+	/* uint64_t Counter::send(const NIM::Counter::command_noargs_64ret cmd){ */
+	/* 	std::string tmp{send_and_check(cmdList[cmd])}; */
+	/* 	if(tmp.size() == 8) return string_to_uint64_t(tmp); */
+	/* 	for(int att{}; att<5; ++att){ */
+	/* 		tmp = send_and_check(cmdList[cmd]); */
+	/* 		if(tmp.size() == 8) return string_to_uint64_t(tmp); */
+	/* 	} */
+	/* 	throw MaxCommunicationAttempts{sp.getPort(), tp, serialNumber, cmdList[cmd]}; */ 
+	/* } */
+
 	
-	std::string Module::send_and_check(const std::string &s){
-		sp.flush();
-		int attempts{};
-		std::string buff;
-		do{
-			//5 attempts to send the message
-			if(attempts >= 5){
-				throw /* error */;
-			}
+
+	/* uint64_t Counter::send(const NIM::Counter::command_noargs_64ret cmd){ */
+	/* 	std::string tmp{}; */
+	/* 	int attempts{}; */
+	/* 	do{ */
+	/* 		if(attempts >= 5) throw MaxCommunicationAttempts{sp.getPort(), tp, serialNumber}; */ 
+	/* 		tmp = send_and_check(cmdList[cmd]); */
+	/* 		++attempts; */
+	/* 	}while(tmp.size() != 8); */
+	/* 	return string_to_uint64_t(tmp); */
+	/* } */
+	
+	std::string Module_base::send_and_check(const std::string &s, const uint8_t size, uint16_t N ){
+		std::string buff{};
+		/* std::cout << s << "\n"; */
+		//5 default/N attempts to send the message
+		for(int attempts{}; attempts<N; ++attempts){
 			try{
+				sp.flushInput();
 				sp.write(s);
-				sp.readline(buff, 10);
+				while(!(sp.waitReadable()));
+				/* std::cout << sp.available() << ":"; */
+				buff = sp.readline(10);
+			}
+			catch(const serial::IOException &e){
+				throw ModuleUnreachable{sp.getPort(), tp, serialNumber, s};
 			}
 			catch(const std::exception &e){
-				throw e;
+				throw UnexpectedException{e};
 			}
-		}while(!(buff.compare(0,4, errstr)));
-		return buff;
+			if((buff.find(errstr) == std::string::npos) && (buff.size() == size)) return buff;
+		}
+		throw MaxCommunicationAttempts{sp.getPort(), tp, serialNumber, s}; 
+	}
+	
+	std::string typeStr(moduleType t){
+		switch(t){
+			case counter:
+				return "Counter";
+				break;
+			case universal:
+				return "Universal";
+				break;
+			case unknown:
+				return "Unknown";
+				break;
+			default:
+				return "";
+				break;
+		}
 	}
 
-
-	/* void Module::send_universal(const universalCmd_noargs cmd) const{ */
-	/* 	switch(cmd){ */
-	/* 		case universalCMD_noargs::SRLN: */
-
-
-	/* } */
 	
-	/* int64_t send(serial::Serial& sp, NIM::commands cmd, std::vector<uint8_t> content){ */
-	/* 	switch(cmd){ */
-	/* 		case NIM::commands::RSTA: */
-				
-	/* 			break; */
-	/* 		case NIM::commands::RST1: */
-	/* 			break; */
-	/* 		case NIM::commands::RST2: */
-	/* 			break; */
-	/* 		case NIM::commands::SRLN: */
-	/* 			break; */
-	/* 		case NIM::commands::GET1: */
-	/* 			break; */
-	/* 		case NIM::commands::GET2: */
-	/* 			break; */
-	/* 		case NIM::commands::EN_1: */
-	/* 			break; */
-	/* 		case NIM::commands::EN_2: */
-	/* 			break; */
-	/* 		default: */
-	/* 			break; */
-	/* 	} */
-	/* } */
 
 
 }

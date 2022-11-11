@@ -1,24 +1,31 @@
 /* Copyright (C) 2022 Alluringbits */
 #include "libNIM.h"
 
+#include <thread>
+#include <chrono>
+
 namespace NIM{
+
+	uint64_t send_serialNumber_request(serial::Serial &sp, uint16_t N= 5);
+	uint32_t string_to_uint32_t(const std::string &s);
+	uint64_t string_to_uint64_t(const std::string &s);
 	
 	Module_base::Module_base(const NIM::moduleType t, const std::string pi, uint64_t srl) :  tp{t}, serialNumber{srl}{
 		try{
-			sp.setPort(pi);
-			sp.open();
+			sp->setPort(pi);
+			sp->open();
 		}
 		catch(const serial::IOException & e){
-			throw ModuleUnreachable{sp.getPort()};
+			throw ModuleUnreachable{sp->getPort()};
 		}catch(const std::exception & e){
 			throw UnexpectedException{e};
 		}
 	}
 
-	std::vector<std::shared_ptr<NIM::Module_base>> listAvailableModules(){
-		std::vector<std::shared_ptr<NIM::Module_base>> lsm;
+	std::vector<NIM::ModuleInfo> listAvailableModules(){
+		std::vector<NIM::ModuleInfo> lsm;
 		auto lsp{serial::list_ports()};
-		serial::Serial tmpS{};
+		serial::Serial tmpS{"", 9600, serial::Timeout{0,1000,4}};
 		for(auto i : lsp){
 			//do: force check to send serial number request to every serial port in case all modules aren't found
 			//do:  
@@ -26,11 +33,11 @@ namespace NIM{
 				try{
 					tmpS.setPort(i.port);
 					tmpS.open();
-					uint64_t num{send_serialNumber_request(tmpS)};
+					uint64_t num{send_serialNumber_request(tmpS,5)};
 					tmpS.close();
 					switch(num){
 						case 0:
-							lsm.emplace_back(std::make_shared<NIM::Counter>(i.port, num));
+							lsm.emplace_back(NIM::ModuleInfo{i.port, NIM::counter, num});
 							break;
 						default:
 							break;
@@ -38,9 +45,6 @@ namespace NIM{
 				}
 				catch(const serial::IOException &e){
 					throw ModuleUnreachable{i.port};
-					//serial error checking and rethrowing with custom NIM-specific errors
-					//do: create std::exception NIM classes 
-
 				}
 				catch(const NIM::MaxCommunicationAttempts & e){
 					throw e;
@@ -50,21 +54,23 @@ namespace NIM{
 				}
 			}
 		}
-
+		
 		return lsm;
 	}
 	
-	uint64_t send_serialNumber_request(serial::Serial &sp, uint16_t N){
+	uint64_t send_serialNumber_request(serial::Serial &psp, uint16_t N){
 		static std::string out{'S','R','L','N'};
 		std::string buff;
 		for(int attempts{}; attempts< N; ++attempts){
-			sp.flushInput();
-			sp.write(out);
-			while(!(sp.waitReadable()));
-			buff = sp.readline(10);
-			if((buff.find("ERR!") == std::string::npos) && (buff.size() == 8)) return string_to_uint64_t(buff);
+			/* std::this_thread::sleep_for(std::chrono::milliseconds(2000)); */
+			psp.flushInput();
+			psp.write(out);
+			/* while(!(sp.waitReadable())); */
+			buff = psp.readline(10);
+			return 0;
+			if((buff.find("ERR!") == std::string::npos) && ((buff.size()-1) == 8)) return string_to_uint64_t(buff);
 		}
-		throw MaxCommunicationAttempts{sp.getPort()}; 
+		throw MaxCommunicationAttempts{psp.getPort()}; 
 	}
 
 	uint32_t string_to_uint32_t(const std::string &s){
@@ -89,28 +95,6 @@ namespace NIM{
 		return string_to_uint64_t(send_and_check(cmdList[cmd], 8));
 	}
 
-	/* uint64_t Counter::send(const NIM::Counter::command_noargs_64ret cmd){ */
-	/* 	std::string tmp{send_and_check(cmdList[cmd])}; */
-	/* 	if(tmp.size() == 8) return string_to_uint64_t(tmp); */
-	/* 	for(int att{}; att<5; ++att){ */
-	/* 		tmp = send_and_check(cmdList[cmd]); */
-	/* 		if(tmp.size() == 8) return string_to_uint64_t(tmp); */
-	/* 	} */
-	/* 	throw MaxCommunicationAttempts{sp.getPort(), tp, serialNumber, cmdList[cmd]}; */ 
-	/* } */
-
-	
-
-	/* uint64_t Counter::send(const NIM::Counter::command_noargs_64ret cmd){ */
-	/* 	std::string tmp{}; */
-	/* 	int attempts{}; */
-	/* 	do{ */
-	/* 		if(attempts >= 5) throw MaxCommunicationAttempts{sp.getPort(), tp, serialNumber}; */ 
-	/* 		tmp = send_and_check(cmdList[cmd]); */
-	/* 		++attempts; */
-	/* 	}while(tmp.size() != 8); */
-	/* 	return string_to_uint64_t(tmp); */
-	/* } */
 	
 	std::string Module_base::send_and_check(const std::string &s, const uint8_t size, uint16_t N ){
 		std::string buff{};
@@ -118,21 +102,22 @@ namespace NIM{
 		//5 default/N attempts to send the message
 		for(int attempts{}; attempts<N; ++attempts){
 			try{
-				sp.flushInput();
-				sp.write(s);
-				while(!(sp.waitReadable()));
+				sp->flushInput();
+				sp->write(s);
+				/* while((sp.waitReadable())); */
 				/* std::cout << sp.available() << ":"; */
-				buff = sp.readline(10);
+				//MODIFY 10 to be size
+				buff = sp->readline(10);
 			}
 			catch(const serial::IOException &e){
-				throw ModuleUnreachable{sp.getPort(), tp, serialNumber, s};
+				throw ModuleUnreachable{sp->getPort(), tp, serialNumber, s};
 			}
 			catch(const std::exception &e){
 				throw UnexpectedException{e};
 			}
-			if((buff.find(errstr) == std::string::npos) && (buff.size() == size)) return buff;
+			if((buff.find(errstr) == std::string::npos) && ((buff.size()-1) == size)) return buff;
 		}
-		throw MaxCommunicationAttempts{sp.getPort(), tp, serialNumber, s}; 
+		throw MaxCommunicationAttempts{sp->getPort(), tp, serialNumber, s}; 
 	}
 	
 	std::string typeStr(moduleType t){
@@ -151,9 +136,5 @@ namespace NIM{
 				break;
 		}
 	}
-
-	
-
-
 }
 

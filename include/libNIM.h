@@ -31,7 +31,7 @@
 #include <string>
 #include <memory>
 #include <iostream>
-#include <cstdlib>
+#include <variant>
 #include <new>
 
 namespace NIM{
@@ -40,19 +40,16 @@ namespace NIM{
 			Module_base(const NIM::moduleType t, const std::string pi, uint64_t srl);
 			Module_base(NIM::Module_base &&m) = default;
 			Module_base & operator=(Module_base &&m) = default;
-			~Module_base(){};
-			
+			virtual ~Module_base(){};
 
-			constexpr moduleType getType() const noexcept {return tp;};
+			virtual moduleType getType() const noexcept {return tp;};
 			constexpr uint64_t getSerialNumber() const noexcept {return serialNumber;};
 		protected:
 			moduleType tp;
-			serial::Serial sp{};
+			std::unique_ptr<serial::Serial> sp{std::make_unique<serial::Serial>("", 9600, serial::Timeout{0,1000,4})};
 			const uint64_t serialNumber;
 
 			std::string send_and_check(const std::string &s, const uint8_t size, uint16_t N = 5 );
-			/* static constexpr std::string_view srlnstr{"SRLN"}; */
-			/* static constexpr std::string_view rstastr{"RSTA"}; */
 			static constexpr std::string_view errstr{"ERR!"};
 		private:
 			Module_base(const NIM::Module_base &m) = delete;
@@ -60,11 +57,12 @@ namespace NIM{
 			
 	};
 	using Module_ptr=std::shared_ptr<NIM::Module_base>;
-	using Module=Module_base;
+	/* using Module=Module_base; */
 
 	struct Counter : public Module_base{
 			Counter(std::string pi, uint64_t srln) : Module_base{counter, pi, srln}{};
-			
+			Counter(NIM::Counter &&m) = default;
+			Counter & operator=(Counter &&m) = default;	
 			enum command_noargs_bool {RSTA, RST1, RST2, EN_1, EN_2};
 			enum command_noargs_32ret {GET1 = 6, GET2};
 			enum command_noargs_64ret {SRLN = 5};
@@ -74,19 +72,33 @@ namespace NIM{
 			//bool send(const NIM::Counter::command_args_bool cmd, const std::vector<uint8_t> arg) const;
 			uint32_t send(const  NIM::Counter::command_noargs_32ret cmd) ; 
 			uint64_t send(const  NIM::Counter::command_noargs_64ret cmd) ;
+			constexpr NIM::moduleType getType() const noexcept override{return _intTp;}
 		private:
 			const std::string cmdList[8]{{'R','S','T','A'},{'R','S','T','1'},{'R','S','T','2'},{'E','N','_','1'},{'E','N','_','2'},{'S','R','L','N'},{'G','E','T','1'},{'G','E','T','2'}};
+			static constexpr NIM::moduleType _intTp{NIM::counter};
 	};
 
+	struct Unknown : public Module_base{
+	};
+
+	struct ModuleInfo{
+		ModuleInfo(std::string pn, NIM::moduleType t, uint64_t sn) : portName{pn}, type{t}, serialNumber{sn}{};
+		const std::string portName;
+		const NIM::moduleType type;
+		const uint64_t serialNumber;
+	};
 	
+	std::vector<NIM::ModuleInfo> listAvailableModules();
+	template <typename T>
+	std::vector<T> listSpecificModules(){
+		std::vector<T> ls{};
+		const auto lsmi{listAvailableModules()};
+		for(auto i : lsmi) ls.emplace_back(T{i.portName,  i.serialNumber});
+		return ls;	
+	}
 
-	std::vector<std::shared_ptr<NIM::Module_base>> listAvailableModules();
-	uint64_t send_serialNumber_request(serial::Serial &sp, uint16_t N= 5);
-	uint32_t string_to_uint32_t(const std::string &s);
-	uint64_t string_to_uint64_t(const std::string &s);
+
 	std::string typeStr(moduleType t);
-
-	//Add error classes for custom errors and wrappers around the serial errors
 	
 	class ModuleUnreachable : public std::exception{
 			std::string desc;

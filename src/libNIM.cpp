@@ -28,11 +28,12 @@ namespace NIM{
 		for(auto i : lsp){
 			//do: force check to send serial number request to every serial port in case all modules aren't found
 			//do:  
-			if(force || i.description.find("rduino") != std::string::npos){
+			if(force || i.description.find("rduino") != std::string::npos || i.description.find("USB") != std::string::npos){
 				try{
 					tmpS.setPort(i.port);
 					tmpS.open();
 					uint64_t num{send_serialNumber_request(tmpS,5)};
+					//std::cout << num << "\n";
 					tmpS.close();
 					switch(num){
 						case 0:
@@ -75,6 +76,8 @@ namespace NIM{
 				psp.write(out);
 				/* while(!(sp.waitReadable())); */
 				buff = psp.readline(10);
+				/* for(auto i : buff) std::cout << (int) i << " "; */
+				/* std::cout << "\n"; */
 			}
 			catch(const serial::IOException &e){
 				throw ModuleUnreachable{psp.getPort()};
@@ -95,7 +98,7 @@ namespace NIM{
 	uint64_t string_to_uint64_t(const std::string &s) noexcept {
 		if(s.size() < 8) return 0;
 		uint64_t t{};
-		for(int i{}; i<8; ++i) (t | ( s[i] << (64-8*(i+1))));
+		for(int i{}; i<8; ++i) t |= ( (int) s[i] << (64-8*(i+1)));
 		return t;
 	}
 
@@ -123,12 +126,12 @@ namespace NIM{
 				/* while(!(sp->waitReadable())); */
 				/* std::cout << sp.available() << ":"; */
 				//MODIFY 10 to be size
-				buff = sp->readline(100);
+				buff = sp->readline(10);
 				/* std::cout << std::atoi(buff.c_str()) << "\n"; */
-				std::cout << buff.size() << ": ";
-				for(auto i : buff) std::printf("%x ", i&255);
+				/* std::cout << buff.size() << ": "; */
+				/* for(auto i : buff) std::printf("%x ", i&255); */
 				/* std::cout << buff; */
-				std::cout << "\t" << string_to_uint32_t(buff) << "\n";
+				/* std::cout << "\t" << string_to_uint32_t(buff) << "\n"; */
 			}
 			catch(const serial::IOException &e){
 				throw ModuleUnreachable{sp->getPort(), tp, serialNumber, s};

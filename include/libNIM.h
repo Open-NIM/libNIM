@@ -88,6 +88,8 @@ namespace NIM{
 		//const std::string error; //possible error message to include, especially useful for debugging during execution and for the user to describe the issue related with it.
 	};
 	
+	//when you want to implement something cool and you work on it but it ends up being useless :(
+	//Description: constexpr auxiliary function for compile-time return of the enum type based on the template argument.
 	template <typename T, typename = std::enable_if_t<std::is_base_of<NIM::Module_base, T>::value>>
 	constexpr NIM::moduleType typeToEnum(){
 		if constexpr (std::is_same<T, NIM::Counter>::value) return NIM::counter;
@@ -95,18 +97,20 @@ namespace NIM{
 	}
 
 	std::vector<NIM::ModuleInfo> listAvailableModules(NIM::moduleType = NIM::universal, bool = 0);
+
+	uint64_t send_serialNumber_request(serial::Serial &sp, uint16_t N= 5);
+	std::string typeStr(moduleType t) noexcept;
+
 	template <typename T, typename = std::enable_if_t<std::is_base_of<NIM::Module_base, T>::value>>
 	std::vector<T> listSpecificModules(){
 		std::vector<T> ls{};
-		const auto lsmi{listAvailableModules()};
-		constexpr NIM::moduleType tmp{typeToEnum<T>()};
-		for(auto i : lsmi) if(i.type == tmp) ls.emplace_back(T{i.portName,  i.serialNumber});
+		const auto lsmi{listAvailableModules(NIM::counter)};
+		/* constexpr NIM::moduleType tmp{typeToEnum<T>()}; */
+		for(auto i : lsmi)  ls.emplace_back(T{i.portName,  i.serialNumber});
 		return ls;	
 	}
 		
 
-	uint64_t send_serialNumber_request(serial::Serial &sp, uint16_t N= 5);
-	std::string typeStr(moduleType t) noexcept;
 	
 	class ModuleUnreachable : public std::exception{
 			std::string desc;

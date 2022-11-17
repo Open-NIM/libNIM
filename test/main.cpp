@@ -18,17 +18,15 @@ int main(){
 	/* auto ls{serial::list_ports()}; */
 	/* for(auto i : ls) std::cout << i.port << ":\t" << i.description << "\t[" << i.hardware_id << "]\n"; */
 		
-	auto avlMods{NIM::listAvailableModules()};
+	/* auto avlMods{NIM::listAvailableModules()}; */
 	std::cout << std::setw(25) << std::left << "Module Type" << std::setw(25) << std::left << "Serial Number:" << "\n";
 	std::cout << std::setfill('-') << std::setw(50) << "\n" << "\n";
 	std::cout << std::setfill(' ');
-	std::cout << std::setw(50) << "================================================" << "\n";
-	std::cout << std::setw(50) << "test" << "\n";
 	std::cout.clear(); 
-	for(auto i : avlMods){
-		std::cout << std::setw(25) << std::left << NIM::typeStr(i.type)
-		<< std::setw(25) << std::left << i.serialNumber << "\n";
-	}
+	/* for(auto i : avlMods){ */
+	/* 	std::cout << std::setw(25) << std::left << NIM::typeStr(i.type) */
+	/* 	<< std::setw(25) << std::left << i.serialNumber << "\n"; */
+	/* } */
 	
 	auto lssm{NIM::listSpecificModules<NIM::Counter>()};
 	for(auto& i : lssm){

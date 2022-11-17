@@ -11,7 +11,7 @@ if(APPLE)
     find_library(FOUNDATION_LIBRARY Foundation)
 endif()
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-	SET(GCC_FLAGS "-Wall -g -pedantic -pedantic-errors -ansi -Wextra -Weffc++ -std=c++20 -O0")
+	SET(GCC_FLAGS "-Wall -g -pedantic -pedantic-errors -ansi -Wextra -Weffc++ -std=c++20 -O0 ")
 	add_definitions(${GCC_FLAGS})
 endif()
 

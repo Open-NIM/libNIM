@@ -33,6 +33,7 @@
 #include <iostream>
 #include <variant>
 #include <new>
+#include <type_traits>
 
 namespace NIM{
 	enum moduleType {counter, universal, unknown};
@@ -56,8 +57,6 @@ namespace NIM{
 			Module_base operator=(const Module_base &m) = delete;
 			
 	};
-	using Module_ptr=std::shared_ptr<NIM::Module_base>;
-	/* using Module=Module_base; */
 
 	struct Counter : public Module_base{
 			Counter(std::string pi, uint64_t srln) : Module_base{counter, pi, srln}{};
@@ -88,17 +87,25 @@ namespace NIM{
 		const uint64_t serialNumber;
 	};
 	
-	std::vector<NIM::ModuleInfo> listAvailableModules();
-	template <typename T>
+	template <typename T, typename = std::enable_if_t<std::is_base_of<NIM::Module_base, T>::value>>>
+	constexpr NIM::moduleType typeToEnum(){
+		if constexpr (std::is_same<T, NIM::Counter>::value) return NIM::counter;
+		if constexpr (std::is_same<T, NIM::Unknown>::value) return NIM::unknown;
+	}
+
+	std::vector<NIM::ModuleInfo> listAvailableModules(bool = 0);
+	template <typename T, typename = std::enable_if_t<std::is_base_of<NIM::Module_base, T>::value>>
 	std::vector<T> listSpecificModules(){
 		std::vector<T> ls{};
 		const auto lsmi{listAvailableModules()};
-		for(auto i : lsmi) ls.emplace_back(T{i.portName,  i.serialNumber});
+		constexpr NIM::moduleType tmp{typeToEnum<T>()};
+		for(auto i : lsmi) if(i.type == tmp) ls.emplace_back(T{i.portName,  i.serialNumber});
 		return ls;	
 	}
+		
 
-
-	std::string typeStr(moduleType t);
+	uint64_t send_serialNumber_request(serial::Serial &sp, uint16_t N= 5);
+	std::string typeStr(moduleType t) noexcept;
 	
 	class ModuleUnreachable : public std::exception{
 			std::string desc;

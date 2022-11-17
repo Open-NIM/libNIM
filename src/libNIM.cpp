@@ -21,7 +21,7 @@ namespace NIM{
 		}
 	}
 
-	std::vector<NIM::ModuleInfo> listAvailableModules(bool force){
+	std::vector<NIM::ModuleInfo> listAvailableModules(NIM::moduleType t, bool force){
 		std::vector<NIM::ModuleInfo> lsm;
 		auto lsp{serial::list_ports()};
 		serial::Serial tmpS{"", 9600, serial::Timeout{0,1000,4}};
@@ -36,7 +36,11 @@ namespace NIM{
 					tmpS.close();
 					switch(num){
 						case 0:
-							lsm.emplace_back(NIM::ModuleInfo{i.port, NIM::counter, num});
+							if(force) lsm.emplace_back(NIM::ModuleInfo{i.port, NIM::unknown, 0});
+							break;
+						case 1:
+							//this looks extremely bad in style, look for a way to change this into something better. User will have to use NIM::universal when listing every single module and using force
+							if(t == NIM::counter || t == NIM::universal) lsm.emplace_back(NIM::ModuleInfo{i.port, NIM::counter, num});
 							break;
 						default:
 							break;
@@ -78,7 +82,6 @@ namespace NIM{
 			catch(const std::exception &e){
 				throw UnexpectedException{e};
 			}
-			return 0;
 			if((buff.find("ERR!") == std::string::npos) && ((buff.size()-1) == 8)) return string_to_uint64_t(buff);
 		}
 		throw MaxCommunicationAttempts{psp.getPort()}; 

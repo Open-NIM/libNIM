@@ -85,15 +85,16 @@ namespace NIM{
 		const std::string portName;
 		const NIM::moduleType type;
 		const uint64_t serialNumber;
+		//const std::string error; //possible error message to include, especially useful for debugging during execution and for the user to describe the issue related with it.
 	};
 	
-	template <typename T, typename = std::enable_if_t<std::is_base_of<NIM::Module_base, T>::value>>>
+	template <typename T, typename = std::enable_if_t<std::is_base_of<NIM::Module_base, T>::value>>
 	constexpr NIM::moduleType typeToEnum(){
 		if constexpr (std::is_same<T, NIM::Counter>::value) return NIM::counter;
 		if constexpr (std::is_same<T, NIM::Unknown>::value) return NIM::unknown;
 	}
 
-	std::vector<NIM::ModuleInfo> listAvailableModules(bool = 0);
+	std::vector<NIM::ModuleInfo> listAvailableModules(NIM::moduleType = NIM::universal, bool = 0);
 	template <typename T, typename = std::enable_if_t<std::is_base_of<NIM::Module_base, T>::value>>
 	std::vector<T> listSpecificModules(){
 		std::vector<T> ls{};

@@ -36,7 +36,7 @@
 #include <type_traits>
 
 namespace NIM{
-	enum moduleType {counter, universal, unknown};
+	enum moduleType {counter, universal, unknown, known};
 	struct Module_base{
 			Module_base(const NIM::moduleType t, const std::string pi, uint64_t srl);
 			Module_base(NIM::Module_base &&m) = default;
